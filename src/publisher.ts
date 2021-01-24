@@ -25,7 +25,7 @@ const publish = async () => {
   });
 
   const msg = {
-    text: "Started Bulk Operation",
+    text: "Initiated Bulk Operation",
     date: new Date(),
     account: "shopify+1789",
   };
