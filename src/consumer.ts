@@ -20,7 +20,7 @@ const consume = async () => {
     process.exit();
   }
 
-  const bulkOpExchange = "bulk_operation_bulkOpExchange";
+  const bulkOpExchange = "bulk_operation_exchange";
   channel.assertExchange(bulkOpExchange, "direct", {
     durable: true,
   });
@@ -28,10 +28,7 @@ const consume = async () => {
   let orderBulkOpInitiatedQueue: amqp.Replies.AssertQueue;
   try {
     orderBulkOpInitiatedQueue = await channel.assertQueue(
-      "orderBulkOpInitiatedQueue",
-      {
-        exclusive: true,
-      }
+      "orderBulkOpInitiatedQueue"
     );
   } catch (e) {
     console.log("Could not create queue ", e);
@@ -46,7 +43,7 @@ const consume = async () => {
 
   const pollingExchange = "polling_exchange";
   channel.assertExchange(pollingExchange, "direct", {
-    durable: false,
+    durable: true,
   });
 
   let queue5000: amqp.Replies.AssertQueue;
@@ -54,6 +51,7 @@ const consume = async () => {
     queue5000 = await channel.assertQueue(`queue_5000`, {
       messageTtl: 5000,
       deadLetterExchange: bulkOpExchange,
+      deadLetterRoutingKey: "order",
     });
     await channel.bindQueue(queue5000.queue, pollingExchange, "5000");
   } catch (e) {
@@ -66,6 +64,7 @@ const consume = async () => {
     queue10000 = await channel.assertQueue(`queue_10000`, {
       messageTtl: 10000,
       deadLetterExchange: bulkOpExchange,
+      deadLetterRoutingKey: "order",
     });
     await channel.bindQueue(queue10000.queue, pollingExchange, "10000");
   } catch (e) {
@@ -78,6 +77,7 @@ const consume = async () => {
     queue15000 = await channel.assertQueue(`queue_15000`, {
       messageTtl: 15000,
       deadLetterExchange: bulkOpExchange,
+      deadLetterRoutingKey: "order",
     });
     await channel.bindQueue(queue15000.queue, pollingExchange, "15000");
   } catch (e) {
@@ -90,6 +90,7 @@ const consume = async () => {
     queue20000 = await channel.assertQueue(`queue_20000`, {
       messageTtl: 20000,
       deadLetterExchange: bulkOpExchange,
+      deadLetterRoutingKey: "order",
     });
     await channel.bindQueue(queue20000.queue, pollingExchange, "20000");
   } catch (e) {
@@ -97,37 +98,37 @@ const consume = async () => {
     process.exit();
   }
 
-  channel.consume(orderBulkOpInitiatedQueue.queue, (msg) => {
-    if (!msg) {
-      console.log("Error no msg");
-      process.exit();
-    }
-    console.log("--------------------------------");
-    console.log(
-      `Recieved Msg: \n Routing Key: ${
-        msg?.fields.routingKey
-      } \n Content: ${msg?.content.toString()}`
-    );
-    console.log("msg", msg);
-
-    if (msg.fields.routingKey === "queue_2000") {
+  channel.consume(
+    orderBulkOpInitiatedQueue.queue,
+    (msg) => {
+      if (!msg) {
+        console.log("Error no msg");
+        process.exit();
+      }
+      console.log("--------------------------------");
       console.log(
-        "Dropping Msg because it cycled through all dead letter queues"
+        `OrderBulkQueue Recieved Msg: \n Routing Key: ${
+          msg?.fields.routingKey
+        } \n Content: ${msg?.content.toString()}`
       );
-      process.exit();
-    }
+      console.log("msg", msg);
 
-    const random = Math.random() * 10;
-    const bulkOperationStatus = random > 5 ? "complete" : "incomplete";
-    console.log("Bulk Operation Status: ", bulkOperationStatus);
+      const random = Math.random() * 10;
+      const bulkOperationStatus = random > 8 ? "complete" : "incomplete";
+      console.log("Bulk Operation Status: ", bulkOperationStatus);
 
-    if (bulkOperationStatus === "incomplete") {
-      console.log("Will Forward to Polling Exchange");
-      const ttl = TTLCalc.calculateTTL();
-      console.log("Polling Exchange will fwd to queue ", ttl);
-      channel.publish(pollingExchange, `queue_${ttl}`, msg.content);
+      if (bulkOperationStatus === "incomplete") {
+        console.log("Will Forward to Polling Exchange");
+        const ttl = TTLCalc.calculateTTL();
+        console.log("ttl: ", ttl);
+        console.log(`Polling Exchange will fwd to queue ${ttl}`);
+        channel.publish(pollingExchange, `${ttl}`, msg.content);
+      }
+    },
+    {
+      noAck: true,
     }
-  });
+  );
 };
 
 consume();
