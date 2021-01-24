@@ -114,15 +114,39 @@ const consume = async () => {
       console.log("msg", msg);
 
       const random = Math.random() * 10;
-      const bulkOperationStatus = random > 8 ? "complete" : "incomplete";
+      const bulkOperationStatus = random > 10 ? "complete" : "incomplete";
       console.log("Bulk Operation Status: ", bulkOperationStatus);
 
       if (bulkOperationStatus === "incomplete") {
         console.log("Will Forward to Polling Exchange");
-        const ttl = TTLCalc.calculateTTL();
-        console.log("ttl: ", ttl);
+
+        if (msg.properties.headers.ddlQueue === "20000") {
+          console.log("Max retries reached");
+          process.exit();
+        }
+        let ttl = 0;
+        console.log("DDL queue: ", msg.properties.headers.ddlQueue);
+        switch (msg.properties.headers.ddlQueue) {
+          case undefined:
+            ttl = 5000;
+            msg.properties.headers.ddlQueue = "5000";
+            break;
+          case "5000":
+            ttl = 10000;
+            msg.properties.headers.ddlQueue = "10000";
+            break;
+          case "10000":
+            ttl = 15000;
+            msg.properties.headers.ddlQueue = "15000";
+            break;
+          case "15000":
+            ttl = 20000;
+            msg.properties.headers.ddlQueue = "20000";
+            break;
+        }
+
         console.log(`Polling Exchange will fwd to queue ${ttl}`);
-        channel.publish(pollingExchange, `${ttl}`, msg.content);
+        channel.publish(pollingExchange, `${ttl}`, msg.content, msg.properties);
       }
     },
     {
